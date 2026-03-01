@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Ref — Miniature Painting Reference Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #0e0e10;
+    --surface: #17171a;
+    --border: #2a2a30;
+    --accent: #c8a96e;
+    --accent2: #7eb8c9;
+    --text: #e8e8e0;
+    --muted: #6a6a70;
+    --danger: #c96e6e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 12px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+
+  header span {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .drop-zone {
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    padding: 32px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(200, 169, 110, 0.05);
+  }
+
+  .drop-zone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-zone-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+    opacity: 0.4;
+  }
+
+  .drop-zone p {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .drop-zone .filename {
+    color: var(--accent);
+    font-size: 0.75rem;
+    margin-top: 8px;
+    word-break: break-all;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .control {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .control label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .control label span {
+    color: var(--accent2);
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  .btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    width: 100%;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0e0e10;
+    font-weight: 700;
+  }
+
+  .btn.primary:hover {
+    background: #d4b87a;
+  }
+
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .posterize-modes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .posterize-mode {
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .posterize-mode-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .posterize-mode-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex: 1;
+    text-align: left;
+  }
+
+  .posterize-mode-btn:hover { color: var(--text); }
+  .posterize-mode-btn.active {
+    color: var(--accent);
+    background: rgba(200, 169, 110, 0.08);
+  }
+
+  .posterize-mode-controls {
+    padding: 8px 12px 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  input[type="color"] {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: none;
+    cursor: pointer;
+    padding: 2px;
+    margin-right: 8px;
+  }
+
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .viewport-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    gap: 0;
+    flex-shrink: 0;
+  }
+
+  .tab {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .viewport-area {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    padding: 1px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .viewport-area.single {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  .viewport {
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .viewport canvas {
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  #viewportArea:not(.has-content) {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #viewportArea.has-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  #viewportArea.has-content.single {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  #viewportArea.has-content.single .viewport {
+    width: 100%;
+    height: 100%;
+  }
+
+  #viewportArea.has-content.single .viewport img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .viewport-label {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--muted);
+    text-align: center;
+    padding: 32px;
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    width: 100%;
+    height: 100%;
+  }
+
+  .empty-state .big {
+    font-family: 'Syne', sans-serif;
+    font-size: 4rem;
+    opacity: 0.15;
+  }
+
+  .empty-state p {
+    font-size: 0.75rem;
+    line-height: 1.6;
+    max-width: 280px;
+  }
+
+  .download-bar {
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .download-bar .btn {
+    width: auto;
+    padding: 8px 20px;
+  }
+
+  .download-bar .hint {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  .status {
+    font-size: 0.65rem;
+    color: var(--muted);
+    padding: 8px 0;
+    text-align: center;
+  }
+
+  .status.loading { color: var(--accent2); }
+  .status.error { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MINI REF</h1>
+  <span>Miniature Painting Reference Generator</span>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+
+    <div>
+      <div class="section-label">STL File</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".stl" />
+        <div class="drop-zone-icon">⬡</div>
+        <p>Drop STL file here<br>or click to browse</p>
+        <div class="filename" id="filename"></div>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Ring Lamp</div>
+      <div class="control-group">
+        <div class="control">
+          <label>Light Count <span id="lightCountVal">8</span></label>
+          <input type="range" id="lightCount" min="4" max="16" value="8" step="2">
+        </div>
+        <div class="control">
+          <label>Ring Height <span id="ringHeightVal">1.2</span></label>
+          <input type="range" id="ringHeight" min="0.5" max="4.0" value="1.2" step="0.1">
+        </div>
+        <div class="control">
+          <label>Ring Radius <span id="ringRadiusVal">2.5</span></label>
+          <input type="range" id="ringRadius" min="0.3" max="6.0" value="2.5" step="0.1">
+        </div>
+        <div class="control">
+          <label>Light Intensity <span id="intensityVal">0.8</span></label>
+          <input type="range" id="intensity" min="0.5" max="6.0" value="0.8" step="0.1">
+        </div>
+        <div class="control">
+          <label>Ambient Fill <span id="ambientVal">0.05</span></label>
+          <input type="range" id="ambient" min="0.0" max="0.8" value="0.05" step="0.05">
+        </div>
+        <div class="control">
+          <label>Equatorial Fill <span id="equatorialVal">0.4</span></label>
+          <input type="range" id="equatorial" min="0.0" max="1.0" value="0.4" step="0.05">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Posterize</div>
+      <div class="posterize-modes">
+
+        <div class="posterize-mode" id="modeOriginal">
+          <div class="posterize-mode-header">
+            <button class="posterize-mode-btn active" data-mode="original">Original</button>
+            <input type="color" id="modelColor" value="#cccccc" title="Model color">
+          </div>
+        </div>
+
+        <div class="posterize-mode" id="mode2level">
+          <div class="posterize-mode-header">
+            <button class="posterize-mode-btn" data-mode="2level">2 Level</button>
+          </div>
+          <div class="posterize-mode-controls" id="controls2level" style="display:none">
+            <div class="control">
+              <label>Threshold <span id="thresholdVal">50%</span></label>
+              <input type="range" id="threshold" min="1" max="99" value="50" step="1">
+            </div>
+          </div>
+        </div>
+
+        <div class="posterize-mode" id="modeMulti">
+          <div class="posterize-mode-header">
+            <button class="posterize-mode-btn" data-mode="multi">Multi Level</button>
+          </div>
+          <div class="posterize-mode-controls" id="controlsMulti" style="display:none">
+            <div class="control">
+              <label>Levels <span id="multiLevelsVal">5</span></label>
+              <input type="range" id="multiLevels" min="3" max="10" value="5" step="1">
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Model Rotation</div>
+      <div class="control-group">
+        <div class="control">
+          <label>Rotate X <span id="rotXVal">-90°</span></label>
+          <input type="range" id="rotX" min="-180" max="180" value="-90" step="5">
+        </div>
+        <div class="control">
+          <label>Rotate Y <span id="rotYVal">0°</span></label>
+          <input type="range" id="rotY" min="-180" max="180" value="0" step="5">
+        </div>
+        <div class="control">
+          <label>Rotate Z <span id="rotZVal">0°</span></label>
+          <input type="range" id="rotZ" min="-180" max="180" value="0" step="5">
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="content">
+    <div class="viewport-tabs">
+      <button class="tab active" data-view="quad">All Views</button>
+      <button class="tab" data-view="front">Front</button>
+      <button class="tab" data-view="back">Back</button>
+      <button class="tab" data-view="left">Left</button>
+      <button class="tab" data-view="right">Right</button>
+    </div>
+
+    <div class="viewport-area" id="viewportArea">
+      <div class="empty-state">
+        <div class="big">◈</div>
+        <p>Load an STL file to automatically generate your painting reference guide.</p>
+        <p style="font-size:0.65rem; margin-top:8px;">Ring lamp lighting shows value placement on all surfaces simultaneously — front, back, and sides.</p>
+      </div>
+    </div>
+
+    <div class="download-bar" id="downloadBar" style="display:none">
+      <button class="btn" id="downloadAll">↓ Download All Views</button>
+      <button class="btn" id="downloadSheet">↓ Reference Sheet</button>
+      <span class="hint">Right-click any view to save individually</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// STL Parser
+function parseSTL(buffer) {
+  const isBinary = (() => {
+    const header = new Uint8Array(buffer, 0, 80);
+    const numTriangles = new DataView(buffer).getUint32(80, true);
+    const expectedSize = 84 + numTriangles * 50;
+    return buffer.byteLength === expectedSize;
+  })();
+
+  if (isBinary) return parseBinarySTL(buffer);
+  return parseASCIISTL(buffer);
+}
+
+function parseBinarySTL(buffer) {
+  const dv = new DataView(buffer);
+  const numTriangles = dv.getUint32(80, true);
+  const positions = new Float32Array(numTriangles * 9);
+  const normals = new Float32Array(numTriangles * 9);
+
+  for (let i = 0; i < numTriangles; i++) {
+    const offset = 84 + i * 50;
+    const nx = dv.getFloat32(offset, true);
+    const ny = dv.getFloat32(offset + 4, true);
+    const nz = dv.getFloat32(offset + 8, true);
+    for (let v = 0; v < 3; v++) {
+      const vo = offset + 12 + v * 12;
+      positions[i * 9 + v * 3] = dv.getFloat32(vo, true);
+      positions[i * 9 + v * 3 + 1] = dv.getFloat32(vo + 4, true);
+      positions[i * 9 + v * 3 + 2] = dv.getFloat32(vo + 8, true);
+      normals[i * 9 + v * 3] = nx;
+      normals[i * 9 + v * 3 + 1] = ny;
+      normals[i * 9 + v * 3 + 2] = nz;
+    }
+  }
+  return { positions, normals };
+}
+
+function parseASCIISTL(buffer) {
+  const text = new TextDecoder().decode(buffer);
+  const positions = [];
+  const normals = [];
+  const normalRe = /facet normal\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
+  const vertexRe = /vertex\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
+
+  let nm, vm;
+  const nms = [...text.matchAll(/facet normal\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
+  const vms = [...text.matchAll(/vertex\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
+
+  for (let i = 0; i < nms.length; i++) {
+    const nx = parseFloat(nms[i][1]), ny = parseFloat(nms[i][2]), nz = parseFloat(nms[i][3]);
+    for (let v = 0; v < 3; v++) {
+      const vi = i * 3 + v;
+      positions.push(parseFloat(vms[vi][1]), parseFloat(vms[vi][2]), parseFloat(vms[vi][3]));
+      normals.push(nx, ny, nz);
+    }
+  }
+  return { positions: new Float32Array(positions), normals: new Float32Array(normals) };
+}
+
+// App state
+let currentGeometry = null;
+let currentPosterizeMode = 'original'; // 'original', '2level', 'multi'
+let currentView = 'quad';
+const renderedCanvases = {};
+
+// Controls
+const controls = {
+  lightCount: document.getElementById('lightCount'),
+  ringHeight: document.getElementById('ringHeight'),
+  ringRadius: document.getElementById('ringRadius'),
+  intensity: document.getElementById('intensity'),
+  ambient: document.getElementById('ambient'),
+  rotX: document.getElementById('rotX'),
+  rotY: document.getElementById('rotY'),
+  rotZ: document.getElementById('rotZ'),
+  threshold: document.getElementById('threshold'),
+  multiLevels: document.getElementById('multiLevels'),
+  equatorial: document.getElementById('equatorial'),
+};
+
+Object.entries(controls).forEach(([key, el]) => {
+  const valEl = document.getElementById(key + 'Val');
+  if (!valEl) return;
+  const isRot = key.startsWith('rot');
+  const isThreshold = key === 'threshold';
+  const isPosterize = isThreshold || key === 'multiLevels';
+  el.addEventListener('input', () => {
+    valEl.textContent = isRot ? el.value + '°' : isThreshold ? el.value + '%' : el.value;
+    if (Object.keys(renderedCanvases).length) generateViews();
+    if (currentFilename) saveSettings(currentFilename);
+  });
+});
+
+// Color picker
+document.getElementById('modelColor').addEventListener('input', () => {
+  if (Object.keys(renderedCanvases).length) generateViews();
+  if (currentFilename) saveSettings(currentFilename);
+});
+
+// Posterize mode buttons
+document.querySelectorAll('.posterize-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.posterize-mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPosterizeMode = btn.dataset.mode;
+    // Show/hide controls
+    document.getElementById('controls2level').style.display = currentPosterizeMode === '2level' ? 'block' : 'none';
+    document.getElementById('controlsMulti').style.display = currentPosterizeMode === 'multi' ? 'block' : 'none';
+    if (Object.keys(renderedCanvases).length) generateViews();
+    if (currentFilename) saveSettings(currentFilename);
+  });
+});
+
+// File handling
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+
+let currentFilename = '';
+
+function loadFile(file) {
+  currentFilename = file.name;
+  document.getElementById('filename').textContent = file.name;
+  setStatus('Parsing STL...', 'loading');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const { positions, normals } = parseSTL(e.target.result);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+      geometry.computeBoundingBox();
+      geometry.center();
+
+      // Scale to unit size
+      const box = new THREE.Box3().setFromBufferAttribute(geometry.attributes.position);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
+
+      currentGeometry = geometry;
+      const hadSaved = loadSettings(file.name);
+      setStatus(`Loaded — ${Math.round(positions.length / 9)} triangles${hadSaved ? ' (settings restored)' : ''}`, '');
+      generateViews();
+    } catch(err) {
+      setStatus('Error parsing STL: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Render engine
+function renderView(geometry, camera, width, height) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setSize(width, height);
+  renderer.setClearColor(0x111111);
+
+  const scene = new THREE.Scene();
+
+  // Material — Lambert for clean diffuse response
+  const colorHex = document.getElementById('modelColor').value;
+  const material = new THREE.MeshLambertMaterial({ color: colorHex });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.rotation.x = parseFloat(controls.rotX.value) * Math.PI / 180;
+  mesh.rotation.y = parseFloat(controls.rotY.value) * Math.PI / 180;
+  mesh.rotation.z = parseFloat(controls.rotZ.value) * Math.PI / 180;
+  scene.add(mesh);
+
+  // Ring lamp — positioned in model local space then transformed to world space
+  const count = parseInt(controls.lightCount.value);
+  const ringH = parseFloat(controls.ringHeight.value);
+  const radius = parseFloat(controls.ringRadius.value);
+  const intensityVal = parseFloat(controls.intensity.value);
+
+  const rotX = parseFloat(controls.rotX.value) * Math.PI / 180;
+  const rotY = parseFloat(controls.rotY.value) * Math.PI / 180;
+  const rotZ = parseFloat(controls.rotZ.value) * Math.PI / 180;
+  const euler = new THREE.Euler(rotX, rotY, rotZ, 'XYZ');
+  const rotMatrix = new THREE.Matrix4().makeRotationFromEuler(euler);
+
+  function addRingLight(angle, height, rad, intensity) {
+    const pos = new THREE.Vector3(
+      Math.cos(angle) * rad,
+      height,
+      Math.sin(angle) * rad
+    );
+    pos.applyMatrix4(rotMatrix);
+    const light = new THREE.PointLight(0xffffff, intensity, 10);
+    light.position.copy(pos);
+    scene.add(light);
+  }
+
+  // Upper ring
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    addRingLight(angle, ringH, radius, intensityVal / count * 2);
+  }
+
+  // Equatorial ring — fill sides and back
+  const equatorialCount = Math.max(4, count - 2);
+  const equatorialFill = parseFloat(controls.equatorial.value);
+  for (let i = 0; i < equatorialCount; i++) {
+    const angle = (i / equatorialCount) * Math.PI * 2 + (Math.PI / equatorialCount);
+    addRingLight(angle, 0.0, radius * 1.2, (intensityVal * equatorialFill) / equatorialCount * 2);
+  }
+
+  // Ambient fill
+  const ambientVal = parseFloat(controls.ambient.value);
+  scene.add(new THREE.AmbientLight(0xffffff, ambientVal));
+
+  renderer.render(scene, camera);
+
+  const canvas = renderer.domElement;
+  renderer.dispose();
+  return canvas;
+}
+
+function makeCamera(angle, distance) {
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+  const rad = angle * Math.PI / 180;
+  camera.position.set(Math.sin(rad) * distance, 0.3, Math.cos(rad) * distance);
+  camera.lookAt(0, 0, 0);
+  return camera;
+}
+
+function posterize(canvas) {
+  const mode = currentPosterizeMode;
+  if (mode === 'original') return canvas;
+
+  const out = document.createElement('canvas');
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const ctx = out.getContext('2d');
+  ctx.drawImage(canvas, 0, 0);
+  const imageData = ctx.getImageData(0, 0, out.width, out.height);
+  const data = imageData.data;
+
+  const threshold = parseFloat(controls.threshold.value) / 100;
+  const levels = parseInt(controls.multiLevels.value);
+
+  // Normalize to actual min/max value range
+  const greys = new Float32Array(data.length / 4);
+  let min = 255, max = 0;
+  for (let i = 0; i < greys.length; i++) {
+    const g = 0.299 * data[i*4] + 0.587 * data[i*4+1] + 0.114 * data[i*4+2];
+    greys[i] = g;
+    if (g > max) max = g;
+    if (g < min) min = g;
+  }
+  const range = max - min || 1;
+
+  for (let i = 0; i < greys.length; i++) {
+    const normalized = (greys[i] - min) / range;
+    let band;
+    if (mode === '2level') {
+      band = normalized >= threshold ? 255 : 0;
+    } else {
+      band = Math.round(normalized * (levels - 1)) / (levels - 1) * 255;
+    }
+    data[i*4] = data[i*4+1] = data[i*4+2] = band;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return out;
+}
+
+function generateViews() {
+  if (!currentGeometry) return;
+  setStatus('Rendering...', 'loading');
+
+  setTimeout(() => {
+    const size = 512;
+    const views = [
+      { key: 'front', label: 'Front', angle: 0 },
+      { key: 'back', label: 'Back', angle: 180 },
+      { key: 'left', label: 'Left', angle: 90 },
+      { key: 'right', label: 'Right', angle: 270 },
+    ];
+
+    views.forEach(({ key, angle }) => {
+      const camera = makeCamera(angle, 2.2);
+      const raw = renderView(currentGeometry, camera, size, size);
+      renderedCanvases[key] = posterize(raw);
+    });
+
+    updateViewport();
+    document.getElementById('downloadBar').style.display = 'flex';
+    setStatus('Done', '');
+  }, 50);
+}
+
+function updateViewport() {
+  const area = document.getElementById('viewportArea');
+  area.innerHTML = '';
+
+  const viewsToShow = currentView === 'quad'
+    ? ['front', 'back', 'left', 'right']
+    : [currentView];
+
+  area.className = 'viewport-area has-content' + (viewsToShow.length === 1 ? ' single' : '');
+
+  const labels = { front: 'Front', back: 'Back', left: 'Left', right: 'Right' };
+
+  viewsToShow.forEach(key => {
+    const vp = document.createElement('div');
+    vp.className = 'viewport';
+
+    const label = document.createElement('div');
+    label.className = 'viewport-label';
+    label.textContent = labels[key];
+    vp.appendChild(label);
+
+    if (renderedCanvases[key]) {
+      const img = document.createElement('img');
+      img.src = renderedCanvases[key].toDataURL();
+      img.style.cssText = 'max-width:100%;max-height:100%;display:block;';
+      img.title = 'Right-click to save';
+      vp.appendChild(img);
+    }
+
+    area.appendChild(vp);
+  });
+}
+
+// Apply posterize to existing renders
+function applyPosterize() {
+  if (!Object.keys(renderedCanvases).length) return;
+  // Re-render with current posterize level
+  generateViews();
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentView = tab.dataset.view;
+    if (Object.keys(renderedCanvases).length) updateViewport();
+  });
+});
+
+// Posterize buttons
+document.querySelectorAll('.posterize-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.posterize-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPosterizeLevels = parseInt(btn.dataset.levels);
+    if (Object.keys(renderedCanvases).length) generateViews();
+    if (currentFilename) saveSettings(currentFilename);
+  });
+});
+
+// Settings persistence
+function settingsKey(filename) {
+  return 'miniref_' + filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+}
+
+function saveSettings(filename) {
+  const settings = {};
+  Object.entries(controls).forEach(([key, el]) => { settings[key] = el.value; });
+  settings.posterizeMode = currentPosterizeMode;
+  settings.modelColor = document.getElementById('modelColor').value;
+  localStorage.setItem(settingsKey(filename), JSON.stringify(settings));
+}
+
+function loadSettings(filename) {
+  const saved = localStorage.getItem(settingsKey(filename));
+  if (!saved) return false;
+  const settings = JSON.parse(saved);
+  Object.entries(controls).forEach(([key, el]) => {
+    if (settings[key] !== undefined) {
+      el.value = settings[key];
+      const valEl = document.getElementById(key + 'Val');
+      if (valEl) {
+        const isRot = key.startsWith('rot');
+        const isThreshold = key === 'threshold';
+        valEl.textContent = isRot ? settings[key] + '°' : isThreshold ? settings[key] + '%' : settings[key];
+      }
+    }
+  });
+  if (settings.posterizeMode !== undefined) {
+    currentPosterizeMode = settings.posterizeMode;
+    document.querySelectorAll('.posterize-mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === currentPosterizeMode);
+    });
+    document.getElementById('controls2level').style.display = currentPosterizeMode === '2level' ? 'block' : 'none';
+    document.getElementById('controlsMulti').style.display = currentPosterizeMode === 'multi' ? 'block' : 'none';
+  }
+  if (settings.modelColor !== undefined) {
+    document.getElementById('modelColor').value = settings.modelColor;
+  }
+  return true;
+}
+
+// Downloads
+document.getElementById('downloadAll').addEventListener('click', () => {
+  ['front', 'back', 'left', 'right'].forEach(key => {
+    if (renderedCanvases[key]) {
+      const a = document.createElement('a');
+      a.href = renderedCanvases[key].toDataURL('image/png');
+      a.download = `miniref_${key}_${currentPosterizeMode}.png`;
+      a.click();
+    }
+  });
+});
+
+document.getElementById('downloadSheet').addEventListener('click', () => {
+  const size = 512;
+  const sheet = document.createElement('canvas');
+  sheet.width = size * 2;
+  sheet.height = size * 2;
+  const ctx = sheet.getContext('2d');
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, sheet.width, sheet.height);
+
+  const positions = { front: [0,0], back: [size,0], left: [0,size], right: [size,size] };
+  const labels = { front: 'FRONT', back: 'BACK', left: 'LEFT', right: 'RIGHT' };
+
+  Object.entries(positions).forEach(([key, [x, y]]) => {
+    if (renderedCanvases[key]) {
+      ctx.drawImage(renderedCanvases[key], x, y, size, size);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(x, y, 80, 20);
+      ctx.fillStyle = '#aaa';
+      ctx.font = '11px monospace';
+      ctx.fillText(labels[key], x + 8, y + 14);
+    }
+  });
+
+  const a = document.createElement('a');
+  a.href = sheet.toDataURL('image/png');
+  a.download = `miniref_sheet_${currentPosterizeMode}.png`;
+  a.click();
+});
+</script>
+</body>
+</html>
