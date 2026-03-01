@@ -601,10 +601,6 @@ function parseASCIISTL(buffer) {
   const text = new TextDecoder().decode(buffer);
   const positions = [];
   const normals = [];
-  const normalRe = /facet normal\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
-  const vertexRe = /vertex\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
-
-  let nm, vm;
   const nms = [...text.matchAll(/facet normal\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
   const vms = [...text.matchAll(/vertex\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
 
@@ -897,13 +893,6 @@ function updateViewport() {
 
     area.appendChild(vp);
   });
-}
-
-// Apply posterize to existing renders
-function applyPosterize() {
-  if (!Object.keys(renderedCanvases).length) return;
-  // Re-render with current posterize level
-  generateViews();
 }
 
 // Tabs
