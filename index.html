@@ -916,17 +916,6 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
-// Posterize buttons
-document.querySelectorAll('.posterize-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.posterize-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentPosterizeLevels = parseInt(btn.dataset.levels);
-    if (Object.keys(renderedCanvases).length) generateViews();
-    if (currentFilename) saveSettings(currentFilename);
-  });
-});
-
 // Settings persistence
 function settingsKey(filename) {
   return 'miniref_' + filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
