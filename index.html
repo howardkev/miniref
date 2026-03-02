@@ -98,15 +98,6 @@
     background: rgba(200, 169, 110, 0.05);
   }
 
-  .drop-zone input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
-  }
-
   .drop-zone-icon {
     font-size: 2rem;
     margin-bottom: 8px;
@@ -151,7 +142,6 @@
 
   input[type="range"] {
     -webkit-appearance: none;
-    appearance: none;
     width: 100%;
     height: 2px;
     background: var(--border);
@@ -250,7 +240,6 @@
 
   input[type="color"] {
     -webkit-appearance: none;
-    appearance: none;
     width: 24px;
     height: 24px;
     border: 1px solid var(--border);
@@ -439,40 +428,32 @@
     <div>
       <div class="section-label">STL File</div>
       <div class="drop-zone" id="dropZone">
-        <input type="file" id="fileInput" accept=".stl" />
+        <input type="file" id="fileInput" accept=".stl" style="display:none" />
         <div class="drop-zone-icon">⬡</div>
-        <p>Drop STL file here<br>or click to browse</p>
+        <p>Drop STL file here<br>or <label for="fileInput" onclick="event.stopPropagation()" style="color:var(--accent);cursor:pointer;text-decoration:underline;">click to browse</label></p>
         <div class="filename" id="filename"></div>
       </div>
       <div class="status" id="status"></div>
     </div>
 
     <div>
-      <div class="section-label">Ring Lamp</div>
+      <div class="section-label">Lamp</div>
       <div class="control-group">
         <div class="control">
-          <label>Light Count <span id="lightCountVal">8</span></label>
-          <input type="range" id="lightCount" min="4" max="16" value="8" step="2">
-        </div>
-        <div class="control">
-          <label>Ring Height <span id="ringHeightVal">1.2</span></label>
+          <label>Height <span id="ringHeightVal">1.2</span></label>
           <input type="range" id="ringHeight" min="0.5" max="4.0" value="1.2" step="0.1">
         </div>
         <div class="control">
-          <label>Ring Radius <span id="ringRadiusVal">2.5</span></label>
+          <label>Distance <span id="ringRadiusVal">2.5</span></label>
           <input type="range" id="ringRadius" min="0.3" max="6.0" value="2.5" step="0.1">
         </div>
         <div class="control">
-          <label>Light Intensity <span id="intensityVal">0.8</span></label>
+          <label>Intensity <span id="intensityVal">0.8</span></label>
           <input type="range" id="intensity" min="0.5" max="6.0" value="0.8" step="0.1">
         </div>
         <div class="control">
-          <label>Ambient Fill <span id="ambientVal">0.05</span></label>
+          <label>Fill <span id="ambientVal">0.05</span></label>
           <input type="range" id="ambient" min="0.0" max="0.8" value="0.05" step="0.05">
-        </div>
-        <div class="control">
-          <label>Equatorial Fill <span id="equatorialVal">0.4</span></label>
-          <input type="range" id="equatorial" min="0.0" max="1.0" value="0.4" step="0.05">
         </div>
       </div>
     </div>
@@ -603,6 +584,10 @@ function parseASCIISTL(buffer) {
   const text = new TextDecoder().decode(buffer);
   const positions = [];
   const normals = [];
+  const normalRe = /facet normal\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
+  const vertexRe = /vertex\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
+
+  let nm, vm;
   const nms = [...text.matchAll(/facet normal\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
   const vms = [...text.matchAll(/vertex\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
 
@@ -619,13 +604,13 @@ function parseASCIISTL(buffer) {
 
 // App state
 let currentGeometry = null;
+let currentModelHalfHeight = 0.5;
 let currentPosterizeMode = 'original'; // 'original', '2level', 'multi'
 let currentView = 'quad';
 const renderedCanvases = {};
 
 // Controls
 const controls = {
-  lightCount: document.getElementById('lightCount'),
   ringHeight: document.getElementById('ringHeight'),
   ringRadius: document.getElementById('ringRadius'),
   intensity: document.getElementById('intensity'),
@@ -635,7 +620,6 @@ const controls = {
   rotZ: document.getElementById('rotZ'),
   threshold: document.getElementById('threshold'),
   multiLevels: document.getElementById('multiLevels'),
-  equatorial: document.getElementById('equatorial'),
 };
 
 Object.entries(controls).forEach(([key, el]) => {
@@ -675,6 +659,7 @@ document.querySelectorAll('.posterize-mode-btn').forEach(btn => {
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 
+dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', e => {
@@ -714,6 +699,12 @@ function loadFile(file) {
       geometry.scale(1 / maxDim, 1 / maxDim, 1 / maxDim);
 
       currentGeometry = geometry;
+
+      // After scaling, compute half-height in Y for ring positioning
+      const scaledBox = new THREE.Box3().setFromBufferAttribute(geometry.attributes.position);
+      const scaledSize = new THREE.Vector3();
+      scaledBox.getSize(scaledSize);
+      currentModelHalfHeight = scaledSize.y / 2;
       const hadSaved = loadSettings(file.name);
       setStatus(`Loaded — ${Math.round(positions.length / 9)} triangles${hadSaved ? ' (settings restored)' : ''}`, '');
       generateViews();
@@ -725,7 +716,7 @@ function loadFile(file) {
 }
 
 // Render engine
-function renderView(geometry, camera, width, height) {
+function renderView(geometry, camera, width, height, viewAngle) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(width, height);
   renderer.setClearColor(0x111111);
@@ -741,8 +732,8 @@ function renderView(geometry, camera, width, height) {
   mesh.rotation.z = parseFloat(controls.rotZ.value) * Math.PI / 180;
   scene.add(mesh);
 
-  // Ring lamp — positioned in model local space then transformed to world space
-  const count = parseInt(controls.lightCount.value);
+  // Lamp
+  const count = 12;
   const ringH = parseFloat(controls.ringHeight.value);
   const radius = parseFloat(controls.ringRadius.value);
   const intensityVal = parseFloat(controls.intensity.value);
@@ -753,35 +744,41 @@ function renderView(geometry, camera, width, height) {
   const euler = new THREE.Euler(rotX, rotY, rotZ, 'XYZ');
   const rotMatrix = new THREE.Matrix4().makeRotationFromEuler(euler);
 
-  function addRingLight(angle, height, rad, intensity) {
-    const pos = new THREE.Vector3(
-      Math.cos(angle) * rad,
-      height,
-      Math.sin(angle) * rad
-    );
-    pos.applyMatrix4(rotMatrix);
-    const light = new THREE.PointLight(0xffffff, intensity, 10);
+  function addLight(x, y, z, intensity, applyRot = true) {
+    const pos = new THREE.Vector3(x, y, z);
+    if (applyRot) pos.applyMatrix4(rotMatrix);
+    const light = new THREE.PointLight(0xffffff, intensity, 20);
     light.position.copy(pos);
     scene.add(light);
   }
 
-  // Upper ring
+  const topY = currentModelHalfHeight;
+
+  // Strong top-down key light — always in world space directly above
+  addLight(0, topY + ringH * 1.5, 0, intensityVal * 1.5, false);
+
+  // Symmetric ring — rotated with model
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
-    addRingLight(angle, ringH, radius, intensityVal / count * 2);
+    addLight(Math.cos(angle) * radius, topY + ringH, Math.sin(angle) * radius, (intensityVal * 0.5) / count * 2);
   }
 
-  // Equatorial ring — fill sides and back
-  const equatorialCount = Math.max(4, count - 2);
-  const equatorialFill = parseFloat(controls.equatorial.value);
-  for (let i = 0; i < equatorialCount; i++) {
-    const angle = (i / equatorialCount) * Math.PI * 2 + (Math.PI / equatorialCount);
-    addRingLight(angle, 0.0, radius * 1.2, (intensityVal * equatorialFill) / equatorialCount * 2);
+  // Equatorial band — fixed fill
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    addLight(Math.cos(angle) * radius * 1.2, topY, Math.sin(angle) * radius * 1.2, (intensityVal * 0.2) / 8 * 2);
   }
 
   // Ambient fill
   const ambientVal = parseFloat(controls.ambient.value);
   scene.add(new THREE.AmbientLight(0xffffff, ambientVal));
+
+  // Per-view key light — from camera direction, always illuminates front-facing surface
+  const viewRad = viewAngle * Math.PI / 180;
+  const keyDist = radius * 1.5;
+  const keyLight = new THREE.PointLight(0xffffff, intensityVal * 0.6, 20);
+  keyLight.position.set(Math.sin(viewRad) * keyDist, currentModelHalfHeight + ringH * 0.5, Math.cos(viewRad) * keyDist);
+  scene.add(keyLight);
 
   renderer.render(scene, camera);
 
@@ -854,7 +851,7 @@ function generateViews() {
 
     views.forEach(({ key, angle }) => {
       const camera = makeCamera(angle, 2.2);
-      const raw = renderView(currentGeometry, camera, size, size);
+      const raw = renderView(currentGeometry, camera, size, size, angle);
       renderedCanvases[key] = posterize(raw);
     });
 
@@ -897,6 +894,13 @@ function updateViewport() {
   });
 }
 
+// Apply posterize to existing renders
+function applyPosterize() {
+  if (!Object.keys(renderedCanvases).length) return;
+  // Re-render with current posterize level
+  generateViews();
+}
+
 // Tabs
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -904,6 +908,17 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     currentView = tab.dataset.view;
     if (Object.keys(renderedCanvases).length) updateViewport();
+  });
+});
+
+// Posterize buttons
+document.querySelectorAll('.posterize-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.posterize-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPosterizeLevels = parseInt(btn.dataset.levels);
+    if (Object.keys(renderedCanvases).length) generateViews();
+    if (currentFilename) saveSettings(currentFilename);
   });
 });
 
