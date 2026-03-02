@@ -24,13 +24,15 @@ The entire app is a single `index.html` (~1,000 lines). The only external depend
 
 ### Lighting Rig
 
-The lighting simulates the ring lamps miniature painters use:
+Three layers of lighting per render:
 
-- **Upper ring** — N lights evenly distributed in a circle above the model
-- **Equatorial ring** — fill lights at height 0, offset by half a step from the upper ring
+- **Top-down key light** — always in world space directly above the model, unaffected by model rotation
+- **Ring lights** — 12 lights distributed in a circle at the configured height and radius, rotated with the model
+- **Equatorial band** — 8 fixed fill lights at model height for side coverage
+- **Per-view key light** — a light positioned at each camera's angle, ensuring the front-facing surface is always lit
 - **Ambient fill** — uniform omnidirectional base light
 
-All lights are defined in model-local space, then rotated by the model's X/Y/Z rotation matrix — so the light stays fixed while the model rotates, matching how you'd spin a mini under a lamp.
+Ring and per-view lights are anchored to the model's actual top extent (tracked after scaling), so placement is accurate regardless of model proportions.
 
 ### Rendering
 
