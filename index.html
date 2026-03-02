@@ -142,6 +142,7 @@
 
   input[type="range"] {
     -webkit-appearance: none;
+    appearance: none;
     width: 100%;
     height: 2px;
     background: var(--border);
@@ -240,6 +241,7 @@
 
   input[type="color"] {
     -webkit-appearance: none;
+    appearance: none;
     width: 24px;
     height: 24px;
     border: 1px solid var(--border);
@@ -584,10 +586,6 @@ function parseASCIISTL(buffer) {
   const text = new TextDecoder().decode(buffer);
   const positions = [];
   const normals = [];
-  const normalRe = /facet normal\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
-  const vertexRe = /vertex\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)/g;
-
-  let nm, vm;
   const nms = [...text.matchAll(/facet normal\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
   const vms = [...text.matchAll(/vertex\s+([\S]+)\s+([\S]+)\s+([\S]+)/g)];
 
@@ -894,13 +892,6 @@ function updateViewport() {
   });
 }
 
-// Apply posterize to existing renders
-function applyPosterize() {
-  if (!Object.keys(renderedCanvases).length) return;
-  // Re-render with current posterize level
-  generateViews();
-}
-
 // Tabs
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -908,17 +899,6 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     currentView = tab.dataset.view;
     if (Object.keys(renderedCanvases).length) updateViewport();
-  });
-});
-
-// Posterize buttons
-document.querySelectorAll('.posterize-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.posterize-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentPosterizeLevels = parseInt(btn.dataset.levels);
-    if (Object.keys(renderedCanvases).length) generateViews();
-    if (currentFilename) saveSettings(currentFilename);
   });
 });
 
