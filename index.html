@@ -601,7 +601,7 @@ let currentView = 'quad';
 const renderedCanvases = {};
 const rawCanvases = {};
 let rawFrontCanvas = null;
-let customThresholds = null; // null = equal spacing; array of N-1 values in [0,1]
+let customThresholds = {}; // keyed by level count; missing key = equal spacing
 let histMinVal = 0, histMaxVal = 255;
 let draggingThresholdIdx = -1;
 
@@ -623,7 +623,6 @@ Object.entries(controls).forEach(([key, el]) => {
   const isRot = key.startsWith('rot');
   el.addEventListener('input', () => {
     valEl.textContent = isRot ? el.value + '°' : el.value;
-    if (key === 'multiLevels') customThresholds = getEqualThresholds(parseInt(el.value));
     if (Object.keys(renderedCanvases).length) generateViews();
     if (currentFilename) saveSettings(currentFilename);
   });
@@ -697,7 +696,7 @@ function loadFile(file) {
       const scaledSize = new THREE.Vector3();
       scaledBox.getSize(scaledSize);
       currentModelHalfHeight = scaledSize.y / 2;
-      customThresholds = getEqualThresholds(parseInt(controls.multiLevels.value));
+      customThresholds = {};
       const hadSaved = loadSettings(file.name);
       setStatus(`Loaded — ${Math.round(positions.length / 9)} triangles${hadSaved ? ' (settings restored)' : ''}`, '');
       generateViews();
@@ -812,7 +811,7 @@ function posterize(canvas) {
   const data = imageData.data;
 
   const levels = parseInt(controls.multiLevels.value);
-  const thresholds = customThresholds || getEqualThresholds(levels);
+  const thresholds = customThresholds[levels] || getEqualThresholds(levels);
 
   // Normalize to actual min/max value range
   const greys = new Float32Array(data.length / 4);
@@ -893,7 +892,7 @@ function drawHistogram() {
   // Posterize overlay markers
   if (currentPosterizeMode === 'multi') {
     const levels = parseInt(controls.multiLevels.value);
-    const thresholds = customThresholds || getEqualThresholds(levels);
+    const thresholds = customThresholds[levels] || getEqualThresholds(levels);
     thresholds.forEach((t, i) => {
       const x = ((minVal + t * (maxVal - minVal)) / 255) * W;
       ctx.strokeStyle = i === draggingThresholdIdx
@@ -1014,8 +1013,7 @@ function loadSettings(filename) {
   if (settings.modelColor !== undefined) {
     document.getElementById('modelColor').value = settings.modelColor;
   }
-  const levels = parseInt(controls.multiLevels.value);
-  if (Array.isArray(settings.customThresholds) && settings.customThresholds.length === levels - 1) {
+  if (settings.customThresholds && typeof settings.customThresholds === 'object' && !Array.isArray(settings.customThresholds)) {
     customThresholds = settings.customThresholds;
   }
   return true;
@@ -1028,7 +1026,7 @@ function setupHistogramDrag() {
   function thresholdXPositions() {
     if (currentPosterizeMode !== 'multi') return [];
     const levels = parseInt(controls.multiLevels.value);
-    const thresholds = customThresholds || getEqualThresholds(levels);
+    const thresholds = customThresholds[levels] || getEqualThresholds(levels);
     const W = histCanvas.width;
     return thresholds.map(t => ((histMinVal + t * (histMaxVal - histMinVal)) / 255) * W);
   }
@@ -1050,10 +1048,8 @@ function setupHistogramDrag() {
     if (currentPosterizeMode !== 'multi') return;
     const idx = nearestThreshold(e.clientX);
     if (idx === -1) return;
-    if (!customThresholds) {
-      const levels = parseInt(controls.multiLevels.value);
-      customThresholds = getEqualThresholds(levels);
-    }
+    const levels = parseInt(controls.multiLevels.value);
+    if (!customThresholds[levels]) customThresholds[levels] = getEqualThresholds(levels);
     draggingThresholdIdx = idx;
     e.preventDefault();
   });
@@ -1071,13 +1067,15 @@ function setupHistogramDrag() {
     let t = (rawVal - histMinVal) / rangeVal;
 
     // Clamp between neighboring thresholds with a 0.02 gap
+    const levels = parseInt(controls.multiLevels.value);
+    const arr = customThresholds[levels];
     const gap = 0.02;
-    const prev = draggingThresholdIdx > 0 ? customThresholds[draggingThresholdIdx - 1] + gap : gap;
-    const next = draggingThresholdIdx < customThresholds.length - 1
-      ? customThresholds[draggingThresholdIdx + 1] - gap : 1 - gap;
+    const prev = draggingThresholdIdx > 0 ? arr[draggingThresholdIdx - 1] + gap : gap;
+    const next = draggingThresholdIdx < arr.length - 1
+      ? arr[draggingThresholdIdx + 1] - gap : 1 - gap;
     t = Math.max(prev, Math.min(next, t));
 
-    customThresholds[draggingThresholdIdx] = t;
+    arr[draggingThresholdIdx] = t;
     reposterize();
     drawHistogram();
   });
