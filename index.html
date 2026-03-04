@@ -471,18 +471,6 @@
           </div>
         </div>
 
-        <div class="posterize-mode" id="mode2level">
-          <div class="posterize-mode-header">
-            <button class="posterize-mode-btn" data-mode="2level">2 Level</button>
-          </div>
-          <div class="posterize-mode-controls" id="controls2level" style="display:none">
-            <div class="control">
-              <label>Threshold <span id="thresholdVal">50%</span></label>
-              <input type="range" id="threshold" min="1" max="99" value="50" step="1">
-            </div>
-          </div>
-        </div>
-
         <div class="posterize-mode" id="modeMulti">
           <div class="posterize-mode-header">
             <button class="posterize-mode-btn" data-mode="multi">Multi Level</button>
@@ -490,7 +478,7 @@
           <div class="posterize-mode-controls" id="controlsMulti" style="display:none">
             <div class="control">
               <label>Levels <span id="multiLevelsVal">5</span></label>
-              <input type="range" id="multiLevels" min="3" max="10" value="5" step="1">
+              <input type="range" id="multiLevels" min="2" max="10" value="5" step="1">
             </div>
           </div>
         </div>
@@ -608,10 +596,14 @@ function parseASCIISTL(buffer) {
 // App state
 let currentGeometry = null;
 let currentModelHalfHeight = 0.5;
-let currentPosterizeMode = 'original'; // 'original', '2level', 'multi'
+let currentPosterizeMode = 'original'; // 'original' | 'multi'
 let currentView = 'quad';
 const renderedCanvases = {};
+const rawCanvases = {};
 let rawFrontCanvas = null;
+let customThresholds = null; // null = equal spacing; array of N-1 values in [0,1]
+let histMinVal = 0, histMaxVal = 255;
+let draggingThresholdIdx = -1;
 
 // Controls
 const controls = {
@@ -622,7 +614,6 @@ const controls = {
   rotX: document.getElementById('rotX'),
   rotY: document.getElementById('rotY'),
   rotZ: document.getElementById('rotZ'),
-  threshold: document.getElementById('threshold'),
   multiLevels: document.getElementById('multiLevels'),
 };
 
@@ -630,10 +621,9 @@ Object.entries(controls).forEach(([key, el]) => {
   const valEl = document.getElementById(key + 'Val');
   if (!valEl) return;
   const isRot = key.startsWith('rot');
-  const isThreshold = key === 'threshold';
-  const isPosterize = isThreshold || key === 'multiLevels';
   el.addEventListener('input', () => {
-    valEl.textContent = isRot ? el.value + '°' : isThreshold ? el.value + '%' : el.value;
+    valEl.textContent = isRot ? el.value + '°' : el.value;
+    if (key === 'multiLevels') customThresholds = getEqualThresholds(parseInt(el.value));
     if (Object.keys(renderedCanvases).length) generateViews();
     if (currentFilename) saveSettings(currentFilename);
   });
@@ -651,8 +641,6 @@ document.querySelectorAll('.posterize-mode-btn').forEach(btn => {
     document.querySelectorAll('.posterize-mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentPosterizeMode = btn.dataset.mode;
-    // Show/hide controls
-    document.getElementById('controls2level').style.display = currentPosterizeMode === '2level' ? 'block' : 'none';
     document.getElementById('controlsMulti').style.display = currentPosterizeMode === 'multi' ? 'block' : 'none';
     if (Object.keys(renderedCanvases).length) generateViews();
     if (currentFilename) saveSettings(currentFilename);
@@ -709,6 +697,7 @@ function loadFile(file) {
       const scaledSize = new THREE.Vector3();
       scaledBox.getSize(scaledSize);
       currentModelHalfHeight = scaledSize.y / 2;
+      customThresholds = getEqualThresholds(parseInt(controls.multiLevels.value));
       const hadSaved = loadSettings(file.name);
       setStatus(`Loaded — ${Math.round(positions.length / 9)} triangles${hadSaved ? ' (settings restored)' : ''}`, '');
       generateViews();
@@ -799,6 +788,17 @@ function makeCamera(angle, distance) {
   return camera;
 }
 
+function getEqualThresholds(levels) {
+  return Array.from({length: levels - 1}, (_, i) => (i + 1) / levels);
+}
+
+function reposterize() {
+  ['front', 'back', 'left', 'right'].forEach(key => {
+    if (rawCanvases[key]) renderedCanvases[key] = posterize(rawCanvases[key]);
+  });
+  updateViewport();
+}
+
 function posterize(canvas) {
   const mode = currentPosterizeMode;
   if (mode === 'original') return canvas;
@@ -811,8 +811,8 @@ function posterize(canvas) {
   const imageData = ctx.getImageData(0, 0, out.width, out.height);
   const data = imageData.data;
 
-  const threshold = parseFloat(controls.threshold.value) / 100;
   const levels = parseInt(controls.multiLevels.value);
+  const thresholds = customThresholds || getEqualThresholds(levels);
 
   // Normalize to actual min/max value range
   const greys = new Float32Array(data.length / 4);
@@ -827,12 +827,11 @@ function posterize(canvas) {
 
   for (let i = 0; i < greys.length; i++) {
     const normalized = (greys[i] - min) / range;
-    let band;
-    if (mode === '2level') {
-      band = normalized >= threshold ? 255 : 0;
-    } else {
-      band = Math.round(normalized * (levels - 1)) / (levels - 1) * 255;
+    let level = thresholds.length;
+    for (let t = 0; t < thresholds.length; t++) {
+      if (normalized < thresholds[t]) { level = t; break; }
     }
+    const band = level / (levels - 1) * 255;
     data[i*4] = data[i*4+1] = data[i*4+2] = band;
   }
 
@@ -864,14 +863,19 @@ function drawHistogram() {
     if (g > maxVal) maxVal = g;
     if (g < minVal) minVal = g;
   }
+  histMinVal = minVal;
+  histMaxVal = maxVal;
 
   // Exclude background + anti-aliased edge pixels (~gray 17 ± 12) from normalization and display
   const bgBucket = Math.round(0.299 * 17 + 0.587 * 17 + 0.114 * 17);
   const bgMargin = 12;
-  let maxCount = 1;
+  // Use 95th-percentile of non-background bucket counts so outlier spikes don't squash the distribution
+  const nonBgCounts = [];
   for (let i = 0; i < 256; i++) {
-    if (Math.abs(i - bgBucket) > bgMargin && hist[i] > maxCount) maxCount = hist[i];
+    if (Math.abs(i - bgBucket) > bgMargin && hist[i] > 0) nonBgCounts.push(hist[i]);
   }
+  nonBgCounts.sort((a, b) => a - b);
+  const maxCount = nonBgCounts[Math.floor(nonBgCounts.length * 0.99)] || nonBgCounts[nonBgCounts.length - 1] || 1;
 
   // Clear
   ctx.fillStyle = '#17171a';
@@ -887,20 +891,16 @@ function drawHistogram() {
   }
 
   // Posterize overlay markers
-  if (currentPosterizeMode === '2level') {
-    const t = parseFloat(controls.threshold.value) / 100;
-    const x = ((minVal + t * (maxVal - minVal)) / 255) * W;
-    ctx.strokeStyle = '#c8a96e';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  } else if (currentPosterizeMode === 'multi') {
+  if (currentPosterizeMode === 'multi') {
     const levels = parseInt(controls.multiLevels.value);
-    ctx.strokeStyle = 'rgba(126,184,201,0.7)';
-    ctx.lineWidth = 1;
-    for (let l = 1; l < levels; l++) {
-      const x = ((minVal + (l / levels) * (maxVal - minVal)) / 255) * W;
+    const thresholds = customThresholds || getEqualThresholds(levels);
+    thresholds.forEach((t, i) => {
+      const x = ((minVal + t * (maxVal - minVal)) / 255) * W;
+      ctx.strokeStyle = i === draggingThresholdIdx
+        ? 'rgba(126,184,201,1.0)' : 'rgba(126,184,201,0.7)';
+      ctx.lineWidth = i === draggingThresholdIdx ? 2 : 1.5;
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-    }
+    });
   }
 }
 
@@ -920,6 +920,7 @@ function generateViews() {
     views.forEach(({ key, angle }) => {
       const camera = makeCamera(angle, 2.2);
       const raw = renderView(currentGeometry, camera, size, size, angle);
+      rawCanvases[key] = raw;
       if (key === 'front') rawFrontCanvas = raw;
       renderedCanvases[key] = posterize(raw);
     });
@@ -984,6 +985,7 @@ function saveSettings(filename) {
   Object.entries(controls).forEach(([key, el]) => { settings[key] = el.value; });
   settings.posterizeMode = currentPosterizeMode;
   settings.modelColor = document.getElementById('modelColor').value;
+  settings.customThresholds = customThresholds;
   localStorage.setItem(settingsKey(filename), JSON.stringify(settings));
 }
 
@@ -997,24 +999,110 @@ function loadSettings(filename) {
       const valEl = document.getElementById(key + 'Val');
       if (valEl) {
         const isRot = key.startsWith('rot');
-        const isThreshold = key === 'threshold';
-        valEl.textContent = isRot ? settings[key] + '°' : isThreshold ? settings[key] + '%' : settings[key];
+        valEl.textContent = isRot ? settings[key] + '°' : settings[key];
       }
     }
   });
   if (settings.posterizeMode !== undefined) {
-    currentPosterizeMode = settings.posterizeMode;
+    // Migrate old '2level' mode to 'multi'
+    currentPosterizeMode = settings.posterizeMode === '2level' ? 'multi' : settings.posterizeMode;
     document.querySelectorAll('.posterize-mode-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === currentPosterizeMode);
     });
-    document.getElementById('controls2level').style.display = currentPosterizeMode === '2level' ? 'block' : 'none';
     document.getElementById('controlsMulti').style.display = currentPosterizeMode === 'multi' ? 'block' : 'none';
   }
   if (settings.modelColor !== undefined) {
     document.getElementById('modelColor').value = settings.modelColor;
   }
+  const levels = parseInt(controls.multiLevels.value);
+  if (Array.isArray(settings.customThresholds) && settings.customThresholds.length === levels - 1) {
+    customThresholds = settings.customThresholds;
+  }
   return true;
 }
+
+// Histogram drag
+function setupHistogramDrag() {
+  const histCanvas = document.getElementById('histogram');
+
+  function thresholdXPositions() {
+    if (currentPosterizeMode !== 'multi') return [];
+    const levels = parseInt(controls.multiLevels.value);
+    const thresholds = customThresholds || getEqualThresholds(levels);
+    const W = histCanvas.width;
+    return thresholds.map(t => ((histMinVal + t * (histMaxVal - histMinVal)) / 255) * W);
+  }
+
+  function nearestThreshold(clientX) {
+    const rect = histCanvas.getBoundingClientRect();
+    const scaleX = histCanvas.width / rect.width;
+    const canvasX = (clientX - rect.left) * scaleX;
+    const xs = thresholdXPositions();
+    let best = -1, bestDist = 8 * scaleX;
+    xs.forEach((x, i) => {
+      const d = Math.abs(canvasX - x);
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    return best;
+  }
+
+  histCanvas.addEventListener('mousedown', e => {
+    if (currentPosterizeMode !== 'multi') return;
+    const idx = nearestThreshold(e.clientX);
+    if (idx === -1) return;
+    if (!customThresholds) {
+      const levels = parseInt(controls.multiLevels.value);
+      customThresholds = getEqualThresholds(levels);
+    }
+    draggingThresholdIdx = idx;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (draggingThresholdIdx === -1) return;
+    const rect = histCanvas.getBoundingClientRect();
+    const scaleX = histCanvas.width / rect.width;
+    const canvasX = (e.clientX - rect.left) * scaleX;
+    const W = histCanvas.width;
+
+    // Convert canvas pixel X → normalized [0,1] threshold value
+    const rangeVal = histMaxVal - histMinVal || 1;
+    const rawVal = (canvasX / W) * 255;
+    let t = (rawVal - histMinVal) / rangeVal;
+
+    // Clamp between neighboring thresholds with a 0.02 gap
+    const gap = 0.02;
+    const prev = draggingThresholdIdx > 0 ? customThresholds[draggingThresholdIdx - 1] + gap : gap;
+    const next = draggingThresholdIdx < customThresholds.length - 1
+      ? customThresholds[draggingThresholdIdx + 1] - gap : 1 - gap;
+    t = Math.max(prev, Math.min(next, t));
+
+    customThresholds[draggingThresholdIdx] = t;
+    reposterize();
+    drawHistogram();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (draggingThresholdIdx !== -1) {
+      draggingThresholdIdx = -1;
+      histCanvas.style.cursor = 'default';
+      drawHistogram();
+      if (currentFilename) saveSettings(currentFilename);
+    }
+  });
+
+  histCanvas.addEventListener('mousemove', e => {
+    if (draggingThresholdIdx !== -1) return;
+    const idx = nearestThreshold(e.clientX);
+    histCanvas.style.cursor = idx !== -1 ? 'ew-resize' : 'default';
+  });
+
+  histCanvas.addEventListener('mouseleave', () => {
+    if (draggingThresholdIdx === -1) histCanvas.style.cursor = 'default';
+  });
+}
+
+setupHistogramDrag();
 
 // Downloads
 document.getElementById('downloadAll').addEventListener('click', () => {
