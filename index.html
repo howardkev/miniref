@@ -889,7 +889,7 @@ function generateViews() {
   setStatus('Rendering...', 'loading');
 
   setTimeout(() => {
-    const size = 512;
+    const size = 1024;
     const views = [
       { key: 'front', label: 'Front', angle: 0 },
       { key: 'back', label: 'Back', angle: 180 },
@@ -1107,7 +1107,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
 });
 
 document.getElementById('downloadSheet').addEventListener('click', () => {
-  const size = 512;
+  const size = 1024;
   const sheet = document.createElement('canvas');
   sheet.width = size * 2;
   sheet.height = size * 2;
