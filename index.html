@@ -443,11 +443,11 @@
       <div class="control-group">
         <div class="control">
           <label>Height <span id="ringHeightVal">1.2</span></label>
-          <input type="range" id="ringHeight" min="0.5" max="4.0" value="1.2" step="0.1">
+          <input type="range" id="ringHeight" min="0.0" max="10.0" value="3.0" step="1.0">
         </div>
         <div class="control">
           <label>Distance <span id="ringRadiusVal">2.5</span></label>
-          <input type="range" id="ringRadius" min="0.3" max="6.0" value="2.5" step="0.1">
+          <input type="range" id="ringRadius" min="0.1" max="6.0" value="2.5" step="0.1">
         </div>
         <div class="control">
           <label>Intensity <span id="intensityVal">0.8</span></label>
@@ -725,20 +725,12 @@ function renderView(geometry, camera, width, height, viewAngle, materialColor = 
   scene.add(mesh);
 
   // Lamp
-  const count = 12;
   const ringH = parseFloat(controls.ringHeight.value);
   const radius = parseFloat(controls.ringRadius.value);
   const intensityVal = parseFloat(controls.intensity.value);
 
-  const rotX = parseFloat(controls.rotX.value) * Math.PI / 180;
-  const rotY = parseFloat(controls.rotY.value) * Math.PI / 180;
-  const rotZ = parseFloat(controls.rotZ.value) * Math.PI / 180;
-  const euler = new THREE.Euler(rotX, rotY, rotZ, 'XYZ');
-  const rotMatrix = new THREE.Matrix4().makeRotationFromEuler(euler);
-
-  function addLight(x, y, z, intensity, applyRot = true) {
+  function addLight(x, y, z, intensity) {
     const pos = new THREE.Vector3(x, y, z);
-    if (applyRot) pos.applyMatrix4(rotMatrix);
     const light = new THREE.PointLight(0xffffff, intensity, 20);
     light.position.copy(pos);
     scene.add(light);
@@ -746,31 +738,18 @@ function renderView(geometry, camera, width, height, viewAngle, materialColor = 
 
   const topY = currentModelHalfHeight;
 
-  // Strong top-down key light — always in world space directly above
-  addLight(0, topY + ringH * 1.5, 0, intensityVal * 1.5, false);
+  // Weak top-down key light — always in world space directly above
+  addLight(0, topY + 8.0, 0, intensityVal * 0.1);
 
-  // Symmetric ring — rotated with model
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2;
-    addLight(Math.cos(angle) * radius, topY + ringH, Math.sin(angle) * radius, (intensityVal * 0.5) / count * 2);
-  }
-
-  // Equatorial band — fixed fill
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2;
-    addLight(Math.cos(angle) * radius * 1.2, topY, Math.sin(angle) * radius * 1.2, (intensityVal * 0.2) / 8 * 2);
-  }
+  // top front light for each view
+  addLight(radius * 1.5, topY + ringH * 1.5, 0, intensityVal * 0.6); // left
+  addLight(0, topY + ringH * 1.5, radius * 1.5, intensityVal * 0.6); // front
+  addLight(-radius * 1.5, topY + ringH * 1.5, 0, intensityVal * 0.6); // right
+  addLight(0, topY + ringH * 1.5, -radius * 1.5, intensityVal * 0.6); // back
 
   // Ambient fill
   const ambientVal = parseFloat(controls.ambient.value);
   scene.add(new THREE.AmbientLight(0xffffff, ambientVal));
-
-  // Per-view key light — from camera direction, always illuminates front-facing surface
-  const viewRad = viewAngle * Math.PI / 180;
-  const keyDist = radius * 1.5;
-  const keyLight = new THREE.PointLight(0xffffff, intensityVal * 0.6, 20);
-  keyLight.position.set(Math.sin(viewRad) * keyDist, currentModelHalfHeight + ringH * 0.5, Math.cos(viewRad) * keyDist);
-  scene.add(keyLight);
 
   renderer.render(scene, camera);
 
