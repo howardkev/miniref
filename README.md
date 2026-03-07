@@ -8,11 +8,11 @@ A single-file web app that generates painting reference guides from 3D STL model
 
 MiniRef helps miniature painters study how light falls on a 3D model. It:
 
-1. Loads an STL file (drag & drop)
-2. Simulates a **ring lamp** lighting rig (like real miniature painters use)
-3. Renders 4 cardinal angles (Front/Back/Left/Right)
-4. Optionally **posterizes** the image to simplify values into discrete steps
-5. Lets you download individual views or a composite reference sheet
+1. Loads an STL file (drag & drop or file picker)
+2. Simulates a lamp rig with configurable height, distance, and intensity
+3. Renders 4 cardinal angles (Front/Back/Left/Right) at 1024×1024
+4. Optionally **posterizes** the render to discrete value steps for value study
+5. Lets you download individual views or a 2048×2048 composite reference sheet
 
 ## Usage
 
@@ -24,26 +24,35 @@ The entire app is a single `index.html` (~1,000 lines). The only external depend
 
 ### Lighting Rig
 
-Three layers of lighting per render:
+Four fixed cardinal point lights (left/front/right/back) placed at upper-front positions around the model, plus:
 
-- **Top-down key light** — always in world space directly above the model, unaffected by model rotation
-- **Ring lights** — 12 lights distributed in a circle at the configured height and radius, rotated with the model
-- **Equatorial band** — 8 fixed fill lights at model height for side coverage
-- **Per-view key light** — a light positioned at each camera's angle, ensuring the front-facing surface is always lit
+- **Weak top-down key** — always in world space directly above the model, unaffected by model rotation
 - **Ambient fill** — uniform omnidirectional base light
 
-Ring and per-view lights are anchored to the model's actual top extent (tracked after scaling), so placement is accurate regardless of model proportions.
+Light positions are anchored relative to the model's actual top extent after scaling, so placement is accurate regardless of model proportions.
 
 ### Rendering
 
-- **Lambert material** — purely diffuse shading with no specular highlights, keeping the focus on light/shadow shapes for value study
-- **4 × 512×512 canvases** rendered per update, cached so view switching doesn't re-render
-- Geometry is centered and scaled to unit size on load, so lamp radius/height parameters are meaningful regardless of STL units
+- **Lambert material** — purely diffuse shading with no specular highlights, keeping focus on light/shadow shapes for value study
+- **4 × 1024×1024 canvases** rendered per update, cached so view switching doesn't re-render
+- Two render passes per view: one with the actual model color (for "Original" display) and one in white (for posterization and histogram)
+- Geometry is centered and scaled to unit size on load, so lamp parameters are meaningful regardless of STL units
 
 ### Posterization
 
-Converts renders to discrete value steps for simplified value study. Grayscale uses ITU-R BT.601 coefficients (`0.299R + 0.587G + 0.114B`) for perceptual accuracy. Normalization uses actual rendered min/max rather than absolute 0–255, ensuring full contrast range regardless of lighting setup.
+Two modes:
+
+- **Original** — full-color Lambert render with user-selected model color
+- **Multi Level** — converts to discrete grayscale value steps
+
+Grayscale uses ITU-R BT.601 coefficients (`0.299R + 0.587G + 0.114B`) for perceptual accuracy. Normalization uses actual rendered min/max rather than absolute 0–255, ensuring full contrast range regardless of lighting setup.
+
+Multi Level mode supports 2–10 levels. Each level band has a visibility toggle (click the swatch to hide/show that value band). Threshold positions between bands can be dragged interactively on the value distribution histogram. Custom thresholds are stored per level count.
+
+### Value Distribution Histogram
+
+Displays the grayscale value distribution of the front view render. Threshold markers are draggable to adjust posterization band boundaries. Resets to equal spacing when the level count changes.
 
 ### Settings
 
-All slider values, posterize mode, and model color are saved to LocalStorage per filename and restored automatically when the same file is reopened.
+All slider values, posterize mode, level count, layer visibility, custom thresholds, and model color are saved to LocalStorage per filename and restored automatically when the same file is reopened.
