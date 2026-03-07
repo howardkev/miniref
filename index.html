@@ -415,6 +415,14 @@
 
   .status.loading { color: var(--accent2); }
   .status.error { color: var(--danger); }
+
+  #layerToggles { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .layer-swatch {
+    width:22px; height:22px; border-radius:3px;
+    border:1.5px solid rgba(255,255,255,0.15);
+    cursor:pointer; box-sizing:border-box;
+  }
+  .layer-swatch.off { opacity:0.25; border-color:rgba(255,80,80,0.5); }
 </style>
 </head>
 <body>
@@ -480,6 +488,7 @@
               <label>Levels <span id="multiLevelsVal">5</span></label>
               <input type="range" id="multiLevels" min="2" max="10" value="5" step="1">
             </div>
+            <div id="layerToggles"></div>
           </div>
         </div>
 
@@ -603,6 +612,7 @@ const rawCanvases = {};    // white render — for histogram and levels
 const coloredCanvases = {}; // actual color render — for original display
 let rawFrontCanvas = null;
 let customThresholds = {}; // keyed by level count; missing key = equal spacing
+let layerVisibility = []; // boolean[] indexed by band (0=darkest)
 let histMinVal = 0, histMaxVal = 255;
 let draggingThresholdIdx = -1;
 
@@ -624,6 +634,7 @@ Object.entries(controls).forEach(([key, el]) => {
   const isRot = key.startsWith('rot');
   el.addEventListener('input', () => {
     valEl.textContent = isRot ? el.value + '°' : el.value;
+    if (key === 'multiLevels') { resetLayerVisibility(); updateLayerToggles(); }
     if (Object.keys(renderedCanvases).length) generateViews();
     if (currentFilename) saveSettings(currentFilename);
   });
@@ -642,6 +653,7 @@ document.querySelectorAll('.posterize-mode-btn').forEach(btn => {
     btn.classList.add('active');
     currentPosterizeMode = btn.dataset.mode;
     document.getElementById('controlsMulti').style.display = currentPosterizeMode === 'multi' ? 'block' : 'none';
+    if (currentPosterizeMode === 'multi') { resetLayerVisibility(); updateLayerToggles(); }
     if (Object.keys(rawCanvases).length) { reposterize(); drawHistogram(); }
     else if (Object.keys(renderedCanvases).length) generateViews();
     if (currentFilename) saveSettings(currentFilename);
@@ -770,6 +782,32 @@ function getEqualThresholds(levels) {
   return Array.from({length: levels - 1}, (_, i) => (i + 1) / levels);
 }
 
+function resetLayerVisibility() {
+  const levels = parseInt(controls.multiLevels.value);
+  layerVisibility = Array(levels).fill(true);
+}
+
+function updateLayerToggles() {
+  const container = document.getElementById('layerToggles');
+  if (!container) return;
+  container.innerHTML = '';
+  const levels = parseInt(controls.multiLevels.value);
+  for (let i = 0; i < levels; i++) {
+    const v = Math.round(i / (levels - 1) * 255);
+    const swatch = document.createElement('div');
+    swatch.className = 'layer-swatch' + (layerVisibility[i] ? '' : ' off');
+    swatch.style.background = `rgb(${v},${v},${v})`;
+    swatch.title = `Band ${i + 1} (value ${v})`;
+    swatch.addEventListener('click', () => {
+      layerVisibility[i] = !layerVisibility[i];
+      swatch.classList.toggle('off', !layerVisibility[i]);
+      reposterize();
+      if (currentFilename) saveSettings(currentFilename);
+    });
+    container.appendChild(swatch);
+  }
+}
+
 function reposterize() {
   ['front', 'back', 'left', 'right'].forEach(key => {
     if (rawCanvases[key]) {
@@ -811,8 +849,13 @@ function posterize(canvas) {
     for (let t = 0; t < thresholds.length; t++) {
       if (normalized < thresholds[t]) { level = t; break; }
     }
-    const band = level / (levels - 1) * 255;
-    data[i*4] = data[i*4+1] = data[i*4+2] = band;
+    if (layerVisibility.length === levels && !layerVisibility[level]) {
+      data[i*4] = data[i*4+1] = data[i*4+2] = 17;
+      data[i*4+3] = 255;
+    } else {
+      const band = Math.round(level / (levels - 1) * 255);
+      data[i*4] = data[i*4+1] = data[i*4+2] = band;
+    }
   }
 
   ctx.putImageData(imageData, 0, 0);
@@ -977,6 +1020,7 @@ function saveSettings(filename) {
   settings.posterizeMode = currentPosterizeMode;
   settings.modelColor = document.getElementById('modelColor').value;
   settings.customThresholds = customThresholds;
+  settings.layerVisibility = layerVisibility;
   localStorage.setItem(settingsKey(filename), JSON.stringify(settings));
 }
 
@@ -1008,6 +1052,13 @@ function loadSettings(filename) {
   if (settings.customThresholds && typeof settings.customThresholds === 'object' && !Array.isArray(settings.customThresholds)) {
     customThresholds = settings.customThresholds;
   }
+  const levels = parseInt(controls.multiLevels.value);
+  if (Array.isArray(settings.layerVisibility) && settings.layerVisibility.length === levels) {
+    layerVisibility = settings.layerVisibility;
+  } else {
+    resetLayerVisibility();
+  }
+  if (currentPosterizeMode === 'multi') updateLayerToggles();
   return true;
 }
 
